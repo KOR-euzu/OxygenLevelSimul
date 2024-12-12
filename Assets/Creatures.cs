@@ -1,15 +1,14 @@
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class Creatures : MonoBehaviour
 {
-    [SerializeField]
-    GameObject CreaturePrefab;
-
     Rigidbody rigid;
+    GameObject Environment;
 
     //성장용 변수
     [SerializeField]
-    static float GrowingRate;
+    float GrowingRate;
 
     [SerializeField]
     float DivideThreshold;
@@ -17,23 +16,28 @@ public class Creatures : MonoBehaviour
     float DivideEnerge;
 
     float MaxEnerge;
-    float Energe;
+    [SerializeField]
+    float Energe = 100;
     [SerializeField]
     float MinimumEnerge;
 
     float Growth;
     int Generation;
 
+    //에너지 관련 변수
     [SerializeField]
     float EnergePerFood;
 
-    //추적용 변수
+    float EnergeConsuption;
     [SerializeField]
-    public float Speed;
+    float SpeedWeight;
+    [SerializeField]
+    float VolumeWeight;
 
     private void Awake()
     {
         rigid = GetComponent<Rigidbody>();
+        Environment = GameObject.FindGameObjectWithTag("Environment");
     }
 
     private void Update()
@@ -41,30 +45,21 @@ public class Creatures : MonoBehaviour
         // 성장 및 분열과 사망
         Growing();
         if(Energe < MinimumEnerge) Destroy(gameObject);
+    }
 
-        // 먹이 획득 및 에너지 관리
-        Tracking();
+    private void OnEnable()
+    {
+        ResetEnergeConsuption();
     }
 
     void Growing()
     {
+        Energe -= EnergeConsuption * Time.deltaTime;
         Growth += GrowingRate * Time.deltaTime;
-        if(Growth >= DivideThreshold || Energe >= DivideEnerge)
+        if(Growth >= DivideThreshold && Energe >= DivideEnerge)
         {
             Divide();
             Growth = 0;
-        }
-    }
-
-    void Tracking()
-    {
-        Transform FoodPos = FindCloseFood();
-        float distance = Vector3.Distance(transform.position, FoodPos.position);
-        if (distance >= 0.5)
-        {
-            transform.LookAt(FoodPos);
-
-            transform.position = Vector3.MoveTowards(transform.position, FoodPos.position, Speed * Time.deltaTime);
         }
     }
 
@@ -72,35 +67,27 @@ public class Creatures : MonoBehaviour
     {
         Vector3 newPos = transform.position + new Vector3(1,0,1) * Random.Range(0.6f,1.4f);
         Generation++;
-        GameObject NewCreature = Instantiate(CreaturePrefab, newPos, Quaternion.identity);
+        Energe /= 2;
+        GameObject NewCreature = Instantiate(gameObject, newPos, Quaternion.identity);
         NewCreature.GetComponent<Creatures>().Generation = Generation;
-        NewCreature.transform.localScale = Vector3.one * Random.Range(0.4f,1.6f);
-    }
-
-    private Transform FindCloseFood()
-    {
-        GameObject[] Foods = GameObject.FindGameObjectsWithTag("Food");
-        float MaxDistance = Mathf.Infinity;
-        Transform ClosestTarget = null;
-        foreach(GameObject food in Foods)
-        {
-            float TargetDistance = Vector3.Distance(transform.position, food.transform.position);
-
-            if(TargetDistance < MaxDistance)
-            {
-                ClosestTarget = food.transform;
-                MaxDistance = TargetDistance;
-            }
-        }
-        return ClosestTarget;
+        NewCreature.transform.localScale = Vector3.one * Random.Range(0.5f,1.5f);
+        NewCreature.GetComponent<CreatureMovement>().Speed = GetComponent<CreatureMovement>().Speed * Random.Range(0.5f, 1.5f);
     }
 
     private void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.tag == "Food")
         {
-            Energe += EnergePerFood;
+            Energe += EnergePerFood * GetSurfaceArea.CalculateSurface(gameObject) * VolumeWeight  * Environment.GetComponent<EnvironmentControll>().GetOxygen();
             Destroy(collision.gameObject);
         }
     }
+
+    void ResetEnergeConsuption()
+    {
+        EnergeConsuption = 
+            (SpeedWeight * GetComponent<CreatureMovement>().Speed)
+            + (VolumeWeight * GetSurfaceArea.CalculateSurface(gameObject));
+    }
 }
+
